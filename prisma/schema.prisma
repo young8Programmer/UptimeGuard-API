@@ -1,0 +1,148 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  monitors      Monitor[]
+  statusPages   StatusPage[]
+  notifications NotificationSettings[]
+  
+  @@index([email])
+}
+
+model Monitor {
+  id              String    @id @default(cuid())
+  userId          String
+  name            String
+  url             String
+  type            MonitorType @default(HTTP)
+  method          String    @default("GET")
+  expectedStatus  Int       @default(200)
+  interval        Int       @default(30000) // milliseconds
+  timeout         Int       @default(10000) // milliseconds
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checks          Check[]
+  incidents       Incident[]
+  metrics         Metric[]
+  
+  @@index([userId])
+  @@index([isActive])
+  @@index([url])
+}
+
+enum MonitorType {
+  HTTP
+  HTTPS
+  TCP
+  PING
+}
+
+model Check {
+  id          String      @id @default(cuid())
+  monitorId   String
+  status      CheckStatus
+  statusCode  Int?
+  responseTime Int?       // milliseconds
+  error       String?
+  checkedAt   DateTime    @default(now())
+  
+  monitor     Monitor     @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  
+  @@index([monitorId, checkedAt])
+  @@index([checkedAt])
+  @@index([status])
+}
+
+enum CheckStatus {
+  UP
+  DOWN
+  TIMEOUT
+  ERROR
+}
+
+model Incident {
+  id          String      @id @default(cuid())
+  monitorId   String
+  startedAt   DateTime    @default(now())
+  resolvedAt  DateTime?
+  downtime    Int?        // milliseconds
+  status      IncidentStatus @default(OPEN)
+  description String?
+  
+  monitor     Monitor     @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  
+  @@index([monitorId, status])
+  @@index([status])
+  @@index([startedAt])
+}
+
+enum IncidentStatus {
+  OPEN
+  RESOLVED
+}
+
+model Metric {
+  id          String    @id @default(cuid())
+  monitorId   String
+  responseTime Int      // milliseconds
+  timestamp   DateTime  @default(now())
+  
+  monitor     Monitor   @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  
+  @@index([monitorId, timestamp])
+  @@index([timestamp])
+}
+
+model StatusPage {
+  id          String    @id @default(cuid())
+  userId      String
+  subdomain   String    @unique
+  title       String
+  description String?
+  isPublic    Boolean   @default(true)
+  customDomain String?
+  theme       String    @default("default")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([subdomain])
+}
+
+model NotificationSettings {
+  id          String    @id @default(cuid())
+  userId      String
+  email       Boolean   @default(true)
+  telegram    Boolean   @default(false)
+  webhook     Boolean   @default(false)
+  telegramChatId String?
+  webhookUrl  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId])
+  @@index([userId])
+}
